@@ -399,7 +399,8 @@
       <li>AssetServer 传输大文件（读取和 POST 回写）；</li>
       <li>顺手确认 mupdf.js 是否支持 docx 输出。</li>
     </ul>
-    <p class="acc">验收：用 5–10 个真实 PDF 测试，确认文字编辑效果可以接受。效果不达标则在此阶段调整方案。</p>
+    <p>测试样本由 Claude 生成：LibreOffice 从 docx 导出的中文文档（含子集字体）、带表格的文档、多栏排版、扫描件（页面图片加噪点和轻微倾斜）、AcroForm 表单、加密 PDF、500 页以上的大文件。另外建议用户补充 2–3 个真实的 Word / WPS 导出文件。</p>
+    <p class="acc">验收：用上述样本测试，确认文字编辑效果可以接受。效果不达标则在此阶段调整方案。</p>
   </div>
 </div>
 <div class="phase">
@@ -482,7 +483,7 @@
 <table>
   <tr><th>事项</th><th>当前建议</th><th>状态</th></tr>
   <tr><td>前端框架</td><td>建议直接采用 Svelte：体积小，响应式写法简洁；没有特别理由不必换成 React / Vue</td><td><span class="tag p1">待确认</span></td></tr>
-  <tr><td>测试用 PDF 样本</td><td>5–10 个日常真的会改的文件：Word 导出、WPS 导出、带表格、扫描件、大文件各一些</td><td><span class="tag p1">待提供</span></td></tr>
+  <tr><td>测试用 PDF 样本</td><td>阶段 0 由 Claude 生成一套样本（见 7 节阶段 0）。生成的样本模拟不了 Word / WPS 真实导出的内部结构，建议用户另外补充 2–3 个日常真的会改的文件</td><td><span class="tag p0">已确定</span></td></tr>
   <tr><td>WebView2 是否已安装</td><td>"设置 → 应用"中搜索 "WebView2 Runtime" 确认</td><td><span class="tag p1">待确认</span></td></tr>
   <tr><td>程序存放位置</td><td>放在可写目录，例如 <code>D:\Tools\PDFTool\</code></td><td><span class="tag p1">待确认</span></td></tr>
 </table>
@@ -500,6 +501,7 @@
       <li>功能：新增"打印"（P1，4.1 节）；PDF 转 Word 增加 mupdf.js 是否支持 docx 输出的验证说明（4.7 节）</li>
       <li>开发计划：阶段 0 补充验证清单；阶段 1 加入打印和便携性检查；阶段 6 明确 OCR 方案对比内容</li>
       <li>风险：新增 7 项风险及对策；待确认事项新增"程序存放位置"</li>
+      <li>测试样本改为由 Claude 在阶段 0 生成，并列出样本类型（7、9 节）</li>
     </ul>
   </td></tr>
 </table>
