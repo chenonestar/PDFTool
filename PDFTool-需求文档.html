@@ -64,7 +64,7 @@
   .note.warn { background: var(--amber-soft); border-color: #f0d58a; }
   .note.info { background: var(--blue-soft); border-color: #b6cffb; }
   .note.ok { background: var(--green-soft); border-color: #a6dcb4; }
-  .note b:first-child { display: block; margin-bottom: 4px; }
+  .note > b:first-child { display: block; margin-bottom: 4px; }
   .tag {
     display: inline-block; font-size: 12px; font-weight: 600; border-radius: 10px;
     padding: 0 8px; line-height: 20px; white-space: nowrap;
@@ -128,7 +128,7 @@
 <header>
   <h1><span>PDFTool</span> 需求文档</h1>
   <div class="meta">
-    <div>版本：<b>v0.1</b></div>
+    <div>版本：<b>v0.2</b></div>
     <div>日期：<b>2026-11-25</b></div>
     <div>状态：<b>需求阶段</b></div>
     <div>使用范围：<b>个人自用</b></div>
@@ -146,6 +146,7 @@
     <li><a href="#s7">开发计划</a></li>
     <li><a href="#s8">风险与对策</a></li>
     <li><a href="#s9">待确认事项</a></li>
+    <li><a href="#s10">修订记录</a></li>
   </ol>
 </nav>
 
@@ -167,7 +168,8 @@
   <tr><th>项目</th><th>要求</th></tr>
   <tr><td>操作系统</td><td>Windows 10 / 11，64 位</td></tr>
   <tr><td>运行依赖</td><td>系统自带的 Microsoft Edge WebView2 Runtime（Win10 一般已随 Edge 安装，Win11 内置）</td></tr>
-  <tr><td>安装方式</td><td>绿色免安装：解压即用，不写注册表，不往 AppData 写数据，整个文件夹拷走即可使用</td></tr>
+  <tr><td>安装方式</td><td>绿色免安装：解压即用，不写注册表，不往 AppData 写数据，整个文件夹拷走即可使用。实现要点见下方"便携性约束"</td></tr>
+  <tr><td>存放位置</td><td>程序目录必须可写（如 <code>D:\Tools\PDFTool\</code>），不要放在 <code>C:\Program Files\</code> 等受保护目录下</td></tr>
   <tr><td>网络</td><td>完全离线运行，不联网</td></tr>
   <tr><td>体积目标</td><td>主程序约 20–30MB（含 MuPDF WASM），OCR 模型另计约 15–20MB</td></tr>
 </table>
@@ -176,7 +178,7 @@
 <pre class="tree">PDFTool/
 ├── PDFTool.exe              <span class="c"># 主程序（Wails 打包，前端资源内嵌）</span>
 ├── ocr/                     <span class="c"># OCR 模型与运行库</span>
-│   ├── onnxruntime.dll
+│   ├── onnxruntime.dll      <span class="c"># 仅 Go 端推理方案需要，见 3.1</span>
 │   ├── det.onnx             <span class="c"># 文字检测模型</span>
 │   ├── rec.onnx             <span class="c"># 文字识别模型</span>
 │   └── keys.txt             <span class="c"># 字典</span>
@@ -185,7 +187,17 @@
     ├── recent.json          <span class="c"># 最近打开的文件</span>
     ├── signatures/          <span class="c"># 签名库</span>
     ├── stamps/              <span class="c"># 自定义图章</span>
-    └── backup/              <span class="c"># 覆盖保存前的原文件备份</span></pre>
+    ├── backup/              <span class="c"># 覆盖保存前的原文件备份</span>
+    └── webview/             <span class="c"># WebView2 用户数据（缓存等），见下方说明</span></pre>
+
+<div class="note warn">
+  <b>便携性约束（实现时必须处理）</b>
+  <ul>
+    <li><b>WebView2 用户数据目录</b>：Wails v2 默认把 WebView2 的用户数据放在 <code>%APPDATA%\PDFTool.exe\</code> 下，会违反"不写 AppData"。必须通过 <code>options.Windows.WebviewUserDataPath</code> 指定为程序目录下的 <code>data/webview/</code>。</li>
+    <li><b>文件关联</b>：设为 PDF 默认打开程序需要写注册表，程序本身<b>不做</b>文件关联注册。由用户在 Windows"打开方式 → 始终使用此应用"中手动设置，程序只负责处理命令行参数传入的文件路径。</li>
+    <li><b>目录不可写</b>：启动时检测程序目录是否可写；不可写（例如放在 <code>Program Files</code> 下）时弹窗提示用户把程序移到其他目录，不回退到 AppData。</li>
+  </ul>
+</div>
 
 <div class="note info">
   <b>备选方案</b>
@@ -200,11 +212,13 @@
   <tr><th>部分</th><th>选型</th><th>说明</th></tr>
   <tr><td class="nowrap">程序外壳</td><td>Wails v2</td><td>Go 后端 + TypeScript 前端，打包为单个 exe</td></tr>
   <tr><td class="nowrap">前端</td><td>Vite + TypeScript + Svelte</td><td>轻量；框架<b>待确认</b>，可换成 React / Vue</td></tr>
-  <tr><td class="nowrap">PDF 引擎</td><td>MuPDF（mupdf.js，WASM）</td><td>在前端的 Web Worker 中运行，负责渲染、结构化文字提取、内容编辑、批注、表单、页面操作、保存。放在 Worker 里，处理大文件时界面不卡</td></tr>
-  <tr><td class="nowrap">中文字体</td><td>系统字体</td><td>由 Go 后端从 <code>C:\Windows\Fonts</code> 读取宋体、黑体、微软雅黑、楷体等，不打包大字体；保存时只嵌入用到的字（字体子集化），控制文件体积</td></tr>
-  <tr><td class="nowrap">Go 后端</td><td>Go 标准库 + Wails 绑定</td><td>文件读写、覆盖保存与备份、系统字体枚举与读取、OCR 推理、调用 Office/WPS 转换、命令行参数（支持双击 PDF 用本程序打开）、设置存储</td></tr>
-  <tr><td class="nowrap">OCR</td><td>PaddleOCR（PP-OCR）模型 + ONNX Runtime</td><td>中文识别准确率明显好于 Tesseract；推理放在 Go 端还是前端，到 OCR 阶段前再做一次选型验证</td></tr>
+  <tr><td class="nowrap">PDF 引擎</td><td>MuPDF（mupdf.js，WASM）</td><td>在前端的 Web Worker 中运行，负责渲染、结构化文字提取、内容编辑、批注、表单、页面操作、保存。放在 Worker 里，处理大文件时界面不卡。撤销 / 重做使用 MuPDF 自带的 journal（操作日志）机制</td></tr>
+  <tr><td class="nowrap">中文字体</td><td>系统字体</td><td>由 Go 后端从 <code>C:\Windows\Fonts</code> 读取宋体、黑体、微软雅黑、楷体等，不打包大字体；保存时只嵌入用到的字（字体子集化），控制文件体积。注意宋体（<code>simsun.ttc</code>）、微软雅黑（<code>msyh.ttc</code>）等是 TTC 字体集合，加载时要指定子字体索引</td></tr>
+  <tr><td class="nowrap">Go 后端</td><td>Go 标准库 + Wails 绑定</td><td>文件读写、覆盖保存与备份、系统字体枚举与读取、OCR 推理（如采用 Go 端方案）、调用 Office/WPS 转换、打印、命令行参数（支持双击 PDF 用本程序打开）、设置存储</td></tr>
+  <tr><td class="nowrap">文件传输</td><td>Wails AssetServer 自定义 Handler</td><td>Wails 绑定调用会把 <code>[]byte</code> 转成 base64 JSON 传递，大文件又慢又占内存。PDF、字体等二进制数据一律走 AssetServer 的自定义 Handler：前端用 <code>fetch</code> 直接取得 ArrayBuffer，保存时以 POST 回传。绑定调用只传路径、参数等小数据</td></tr>
+  <tr><td class="nowrap">OCR</td><td>PaddleOCR（PP-OCR）模型 + ONNX Runtime</td><td>中文识别准确率明显好于 Tesseract。推理位置两种方案待阶段 6 前实测决定：<br>① <b>Go 端</b>：速度快；但常见的 Go 绑定（如 onnxruntime_go）依赖 cgo，需要 MinGW 工具链，构建变复杂（Wails v2 在 Windows 上本身不需要 cgo）；<br>② <b>前端</b>：用 onnxruntime-web（WASM）在 Worker 中推理，免 cgo，发布更简单，不需要 <code>onnxruntime.dll</code>，但速度较慢</td></tr>
   <tr><td class="nowrap">Office 转 PDF</td><td>COM 自动化</td><td>调用本机已安装的 Microsoft Office 或 WPS 导出 PDF；本机没装时该功能不可用</td></tr>
+  <tr><td class="nowrap">打印</td><td>Worker 渲染 + Go 调用系统打印</td><td>不使用 WebView2 打印 canvas（效果和可控性较差）。由 Worker 按打印机分辨率（如 300 / 600 DPI）把页面渲染成位图，交给 Go 后端通过 Windows 打印接口（打印对话框 + GDI）输出。阶段 1 验证打印质量与速度</td></tr>
 </table>
 
 <h3>3.2 架构示意</h3>
@@ -213,15 +227,15 @@
     <h4>界面层（TypeScript + Svelte，运行在 WebView2 中）</h4>
     <p>多标签文档视图 · 缩略图 / 书签面板 · 工具栏 · 编辑交互（文字编辑框、批注绘制、表单设计） · 工具箱面板 · 撤销 / 重做栈</p>
   </div>
-  <div class="arrow">▲ 左：Worker postMessage　右：Wails 绑定调用 ▼</div>
+  <div class="arrow">▲ 左：Worker postMessage　右：Wails 绑定调用（控制类、小数据）+ AssetServer HTTP（文件字节流） ▼</div>
   <div class="arch-row two">
     <div class="box engine">
       <h4>PDF 引擎 Worker（mupdf.js / WASM）</h4>
-      <p>页面渲染 · 结构化文字提取（段落 / 行 / 字、字体、坐标） · 内容删除与重写 · 批注 · 表单 · 页面增删改 · 保存（垃圾回收、字体子集化）</p>
+      <p>页面渲染 · 结构化文字提取（段落 / 行 / 字、字体、坐标） · 内容删除与重写 · 批注 · 表单 · 页面增删改 · 撤销 / 重做（journal） · 保存（垃圾回收、字体子集化）</p>
     </div>
     <div class="box go">
       <h4>Go 后端（Wails 绑定调用）</h4>
-      <p>文件打开 / 保存 / 备份 · 系统字体读取 · OCR 推理（ONNX Runtime） · Office/WPS COM 转换 · 设置与数据存储 · 命令行参数</p>
+      <p>文件打开 / 保存 / 备份 · AssetServer 文件流 · 系统字体读取 · OCR 推理（如采用 Go 端方案） · Office/WPS COM 转换 · 打印 · 设置与数据存储 · 命令行参数</p>
     </div>
   </div>
   <div class="arrow">▼</div>
@@ -231,6 +245,17 @@
   </div>
 </div>
 
+<h3>3.3 正文编辑实现要点</h3>
+<p>mupdf.js 能提供结构化文字提取、redaction（真正删除内容）、添加字体和字体子集化，但<b>没有现成的"文本框排版"能力</b>，段落编辑的排版部分需要自己实现。一次段落修改的处理流程：</p>
+<ol>
+  <li><b>提取</b>：用结构化文字提取拿到段落的行、字、字体、字号、颜色、坐标，推算行距、字距、对齐方式。</li>
+  <li><b>删除原文字</b>：在段落区域加 redaction 并应用，参数设为<b>只删文字</b>：不画黑框、图片不处理、线条不处理。否则表格框线、底纹等会被一起删掉。</li>
+  <li><b>排版</b>（自己实现）：按原段落宽度断行。中文按字断行并处理避头尾（句号、逗号等不出现在行首，左括号、左引号等不出现在行尾）；西文按单词断行；支持左对齐、两端对齐、居中；匹配原行距和字距。</li>
+  <li><b>写回</b>：生成新的文本内容流写回页面；中文使用 Identity-H 编码的 CID 字体；原字体缺字时换用系统字体（见 4.3"缺字回退"）。</li>
+  <li><b>保存</b>：保存时做垃圾回收和字体子集化。</li>
+</ol>
+<p>整个修改包在一次 journal 操作里，一步撤销即可恢复原样。阶段 0 需要把这五步都跑通。</p>
+
 <!-- 4 -->
 <h2 id="s4">4. 功能需求</h2>
 <p>优先级说明：<span class="tag p0">P0</span> 必须有；<span class="tag p1">P1</span> 应该有；<span class="tag p2">P2</span> 可以后期再做。</p>
@@ -239,14 +264,15 @@
 <table>
   <tr><th>功能</th><th>说明</th><th>优先级</th></tr>
   <tr><td>多标签页</td><td>同时打开多个 PDF，标签切换，可拖动调整顺序</td><td><span class="tag p0">P0</span></td></tr>
-  <tr><td>打开文件</td><td>菜单打开、拖文件到窗口打开、命令行参数打开（可设为 PDF 默认程序）、最近文件列表</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>打开文件</td><td>菜单打开、拖文件到窗口打开、命令行参数打开、最近文件列表。用户可以在 Windows"打开方式"中手动把本程序设为 PDF 默认程序（程序本身不写注册表）</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>缩略图面板</td><td>左侧显示页面缩略图，点击跳转；大文件按需生成</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>书签目录</td><td>显示 PDF 自带的书签（大纲），点击跳转；可编辑书签</td><td><span class="tag p1">P1</span></td></tr>
   <tr><td>浏览</td><td>连续滚动 / 单页，缩放（适合宽度、适合页面、自定义比例），旋转视图，跳到指定页</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>搜索</td><td>全文搜索，高亮结果，上一个 / 下一个</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>选择复制</td><td>选中文字复制</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>工具箱面板</td><td>首页式的功能列表：选一个功能，把文件拖进去，处理完导出；支持多个文件批量处理</td><td><span class="tag p1">P1</span></td></tr>
-  <tr><td>快捷键</td><td>常用操作的快捷键（Ctrl+O / S / Z / Y / F 等）</td><td><span class="tag p1">P1</span></td></tr>
+  <tr><td>打印</td><td>选择打印机、页面范围、份数、缩放方式（实际大小 / 适合纸张）、是否打印批注和表单内容；实现方式见 3.1"打印"</td><td><span class="tag p1">P1</span></td></tr>
+  <tr><td>快捷键</td><td>常用操作的快捷键（Ctrl+O / S / Z / Y / F / P 等）</td><td><span class="tag p1">P1</span></td></tr>
 </table>
 
 <h3>4.2 页面操作</h3>
@@ -265,7 +291,7 @@
 <h3>4.3 正文编辑（重点）</h3>
 <table>
   <tr><th>功能</th><th>说明</th><th>优先级</th></tr>
-  <tr><td>段落编辑</td><td>点击文字进入段落编辑状态，显示可编辑文本框；尽量匹配原字体、字号、颜色、行距；修改后在原段落区域内自动换行重排</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>段落编辑</td><td>点击文字进入段落编辑状态，显示可编辑文本框；尽量匹配原字体、字号、颜色、行距；修改后在原段落区域内自动换行重排（含中文避头尾）。删除原文字时不影响表格线、底纹和图片。实现流程见 3.3</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>缺字回退</td><td>原字体是子集、缺少新输入的字时，自动换用相近的系统中文字体</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>文本块增删</td><td>新增文本块（选择字体、字号、颜色）；删除整个文本块</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>文字格式</td><td>修改选中文字的字号、颜色、粗细</td><td><span class="tag p1">P1</span></td></tr>
@@ -314,7 +340,7 @@
   <tr><th>功能</th><th>说明</th><th>优先级</th></tr>
   <tr><td>PDF → 图片</td><td>PNG / JPG，可选 DPI 和页面范围</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>PDF → 纯文本</td><td>按页导出 TXT</td><td><span class="tag p1">P1</span></td></tr>
-  <tr><td>PDF → Word</td><td>尽力还原排版，先试 MuPDF 自带的 docx 输出；不保证复杂版式</td><td><span class="tag p2">P2</span></td></tr>
+  <tr><td>PDF → Word</td><td>尽力还原排版，先试 MuPDF 自带的 docx 输出；不保证复杂版式。注意：C 版 MuPDF 的 docx 输出依赖内置的 extract 库，需先确认 mupdf.js 的 WASM 构建是否包含该功能，不包含时再评估其他方案</td><td><span class="tag p2">P2</span></td></tr>
   <tr><td>图片 → PDF</td><td>多张图片合成 PDF，可排序，可选页面尺寸和边距</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>Office → PDF</td><td>Word、Excel、PPT 文件转 PDF，调用本机 Office 或 WPS；本机没装时给出提示</td><td><span class="tag p1">P1</span></td></tr>
 </table>
@@ -326,7 +352,7 @@
   <tr><td>自动备份</td><td>每个文件第一次覆盖保存前，把原文件备份到 <code>data/backup/</code>，命名为 <code>原文件名_yyyyMMdd-HHmmss.pdf</code>；备份保留天数可设置，默认 30 天</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>安全写入</td><td>先写临时文件，成功后再替换原文件，保存失败不会损坏原文件</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>另存为</td><td>保存为新文件</td><td><span class="tag p0">P0</span></td></tr>
-  <tr><td>撤销 / 重做</td><td>多步撤销和重做，覆盖所有编辑操作</td><td><span class="tag p0">P0</span></td></tr>
+  <tr><td>撤销 / 重做</td><td>多步撤销和重做，覆盖所有编辑操作。基于 MuPDF journal 实现：每个用户操作包成一次 journal 操作，不自己记录逆操作</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>未保存提醒</td><td>标签上标记未保存状态；关闭标签或退出程序时提醒</td><td><span class="tag p0">P0</span></td></tr>
 </table>
 
@@ -338,7 +364,8 @@
   <tr><td>流畅度</td><td>100 页以内的文档翻页、缩放流畅；500 页以上的文档缩略图和页面按需加载</td></tr>
   <tr><td>界面响应</td><td>渲染、保存、OCR 等耗时操作在 Worker 或后端执行，界面不卡；长任务显示进度，可取消</td></tr>
   <tr><td>数据安全</td><td>不联网，文件不外传；保存采用安全写入 + 自动备份</td></tr>
-  <tr><td>便携</td><td>所有数据存放在程序目录的 <code>data/</code> 下，不写注册表、不写 AppData</td></tr>
+  <tr><td>便携</td><td>所有数据（包括 WebView2 用户数据）存放在程序目录的 <code>data/</code> 下，不写注册表、不写 AppData，不注册文件关联；程序目录不可写时启动提示</td></tr>
+  <tr><td>大文件传输</td><td>PDF 等二进制数据经 AssetServer 传输，不经过 base64；打开 100MB 的 PDF 时，前后端之间不产生多余的内存副本</td></tr>
   <tr><td>兼容性</td><td>能打开常见 PDF：Word / WPS 导出的、扫描件、带表单的、带加密的（需输入密码）</td></tr>
 </table>
 
@@ -352,6 +379,7 @@
   <li>PDF/A 合规检查与转换</li>
   <li>多人协作、云同步</li>
   <li>macOS / Linux 版本</li>
+  <li>程序自动注册文件关联（由用户在 Windows 中手动设置）</li>
 </ul>
 
 <!-- 7 -->
@@ -362,7 +390,15 @@
   <div class="no">阶段 0</div>
   <div class="body">
     <h4>技术验证</h4>
-    <p>搭好 Wails 项目骨架；让 mupdf.js 在 WebView2 的 Worker 里跑起来；完成页面渲染和"点段落 → 改字 → 保存"的最简原型；验证系统字体嵌入。</p>
+    <p>搭好 Wails 项目骨架（WebView2 用户数据目录指向 <code>data/webview/</code>）；让 mupdf.js 在 WebView2 的 Worker 里跑起来；完成页面渲染和"点段落 → 改字 → 保存"的最简原型（跑通 3.3 的五个步骤）。同时验证以下几点：</p>
+    <ul>
+      <li>系统字体嵌入，包括 TTC 字体集合按索引加载；</li>
+      <li>redaction 只删文字、不删表格线和图片；</li>
+      <li>中文断行和避头尾；</li>
+      <li>mupdf.js 是否暴露 journal 接口（撤销 / 重做）；</li>
+      <li>AssetServer 传输大文件（读取和 POST 回写）；</li>
+      <li>顺手确认 mupdf.js 是否支持 docx 输出。</li>
+    </ul>
     <p class="acc">验收：用 5–10 个真实 PDF 测试，确认文字编辑效果可以接受。效果不达标则在此阶段调整方案。</p>
   </div>
 </div>
@@ -370,7 +406,7 @@
   <div class="no">阶段 1</div>
   <div class="body">
     <h4>阅读器底座</h4>
-    <p>多标签、缩略图、书签目录、缩放、搜索、选择复制；打开、覆盖保存、自动备份、另存为；撤销 / 重做框架；设置存储。</p>
+    <p>多标签、缩略图、书签目录、缩放、搜索、选择复制；打开、覆盖保存、自动备份、另存为；撤销 / 重做框架（journal）；设置存储；便携性检查（目录可写检测）；打印。</p>
     <p class="acc">验收：可以作为日常 PDF 阅读器使用，保存与备份可靠。</p>
   </div>
 </div>
@@ -407,7 +443,7 @@
   <div class="no">阶段 6</div>
   <div class="body">
     <h4>OCR</h4>
-    <p>先做 OCR 推理放置位置（Go 端 / 前端）的选型验证，再实现 4.6 节功能。</p>
+    <p>先做 OCR 推理放置位置的选型验证：Go 端（onnxruntime + cgo）与前端（onnxruntime-web）各跑一遍，比较速度、构建复杂度和发布体积，再实现 4.6 节功能。</p>
   </div>
 </div>
 <div class="phase">
@@ -428,6 +464,13 @@
   <tr><td>OCR 模型体积与识别精度</td><td>程序变大或识别不准</td><td>采用 PP-OCR 轻量模型；阶段 6 前做选型验证</td></tr>
   <tr><td>PDF 转 Word 效果有限</td><td>复杂版式还原差</td><td>定为 P2，"尽力还原"，不作为核心功能</td></tr>
   <tr><td>电脑缺少 WebView2</td><td>程序无法启动</td><td>启动时检测并提示；备选 Fixed Version 运行时</td></tr>
+  <tr><td>WebView2 默认往 AppData 写用户数据</td><td>违反绿色免安装要求</td><td>设置 <code>WebviewUserDataPath</code> 指向 <code>data/webview/</code>；阶段 0 检查 AppData 下没有新建目录</td></tr>
+  <tr><td>Wails 绑定传 <code>[]byte</code> 走 base64 JSON</td><td>大文件打开、保存慢，内存翻倍</td><td>二进制数据统一走 AssetServer 自定义 Handler；阶段 0 用 100MB 级文件测试</td></tr>
+  <tr><td>删除原文字时误删表格线、底纹</td><td>改字后版面被破坏</td><td>redaction 参数设为只删文字；阶段 0 用带表格的文件验证</td></tr>
+  <tr><td>段落排版需自己实现</td><td>工作量大，中文断行效果不理想</td><td>阶段 0 先做最简版（单一字体、左对齐 + 避头尾），阶段 2 再补两端对齐、混合字体等</td></tr>
+  <tr><td>mupdf.js 未暴露所需接口（journal、docx 输出等）</td><td>撤销 / 重做或 PDF 转 Word 要另想办法</td><td>阶段 0 逐项确认；journal 不可用时改为保存文档快照做撤销；docx 不可用时 PDF 转 Word 延后</td></tr>
+  <tr><td>OCR 放在 Go 端需要 cgo</td><td>构建需要 MinGW，交叉编译和打包更复杂</td><td>阶段 6 前对比 Go 端和前端（onnxruntime-web）两种方案后再定</td></tr>
+  <tr><td>打印质量和速度</td><td>位图打印文件大、速度慢</td><td>按打印机实际 DPI 渲染、逐页提交；阶段 1 实测</td></tr>
 </table>
 <div class="note info">
   <b>许可说明</b>
@@ -438,13 +481,31 @@
 <h2 id="s9">9. 待确认事项</h2>
 <table>
   <tr><th>事项</th><th>当前建议</th><th>状态</th></tr>
-  <tr><td>前端框架</td><td>Svelte（可换成 React / Vue）</td><td><span class="tag p1">待确认</span></td></tr>
+  <tr><td>前端框架</td><td>建议直接采用 Svelte：体积小，响应式写法简洁；没有特别理由不必换成 React / Vue</td><td><span class="tag p1">待确认</span></td></tr>
   <tr><td>测试用 PDF 样本</td><td>5–10 个日常真的会改的文件：Word 导出、WPS 导出、带表格、扫描件、大文件各一些</td><td><span class="tag p1">待提供</span></td></tr>
   <tr><td>WebView2 是否已安装</td><td>"设置 → 应用"中搜索 "WebView2 Runtime" 确认</td><td><span class="tag p1">待确认</span></td></tr>
+  <tr><td>程序存放位置</td><td>放在可写目录，例如 <code>D:\Tools\PDFTool\</code></td><td><span class="tag p1">待确认</span></td></tr>
+</table>
+
+<!-- 10 -->
+<h2 id="s10">10. 修订记录</h2>
+<table>
+  <tr><th>版本</th><th>日期</th><th>修改内容</th></tr>
+  <tr><td class="nowrap">v0.1</td><td class="nowrap">2026-11-25</td><td>初稿</td></tr>
+  <tr><td class="nowrap">v0.2</td><td class="nowrap">2026-11-25</td><td>
+    <ul>
+      <li>便携性：WebView2 用户数据目录改到 <code>data/webview/</code>；明确程序不注册文件关联；增加程序目录可写检测（2、5、6 节）</li>
+      <li>技术方案：新增"文件传输"（AssetServer 自定义 Handler，避免 base64）和"打印"选型；撤销 / 重做改用 MuPDF journal；补充 TTC 字体索引说明；写明 OCR 两种推理方案的 cgo 取舍（3.1、3.2 节）</li>
+      <li>新增 3.3"正文编辑实现要点"：五步处理流程，redaction 只删文字，自写中文断行与避头尾</li>
+      <li>功能：新增"打印"（P1，4.1 节）；PDF 转 Word 增加 mupdf.js 是否支持 docx 输出的验证说明（4.7 节）</li>
+      <li>开发计划：阶段 0 补充验证清单；阶段 1 加入打印和便携性检查；阶段 6 明确 OCR 方案对比内容</li>
+      <li>风险：新增 7 项风险及对策；待确认事项新增"程序存放位置"</li>
+    </ul>
+  </td></tr>
 </table>
 
 <footer>
-  PDFTool 需求文档 v0.1 · 2026-11-25
+  PDFTool 需求文档 v0.2 · 2026-11-25
 </footer>
 
 </div>
