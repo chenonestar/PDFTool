@@ -128,9 +128,9 @@
 <header>
   <h1><span>PDFTool</span> 需求文档</h1>
   <div class="meta">
-    <div>版本：<b>v0.3</b></div>
+    <div>版本：<b>v0.4</b></div>
     <div>日期：<b>2026-11-25</b></div>
-    <div>状态：<b>需求阶段</b></div>
+    <div>状态：<b>阶段 0 已完成（待 Windows 真机确认）</b></div>
     <div>使用范围：<b>个人自用</b></div>
   </div>
 </header>
@@ -219,9 +219,9 @@
 <table>
   <tr><th>部分</th><th>选型</th><th>说明</th></tr>
   <tr><td class="nowrap">程序外壳</td><td>Wails v2</td><td>Go 后端 + TypeScript 前端，打包为单个 exe</td></tr>
-  <tr><td class="nowrap">前端</td><td>Vite + TypeScript + Svelte</td><td>轻量；框架<b>待确认</b>，可换成 React / Vue</td></tr>
+  <tr><td class="nowrap">前端</td><td>Vite + TypeScript + Svelte</td><td>Svelte 5（已确定）</td></tr>
   <tr><td class="nowrap">PDF 引擎</td><td>MuPDF（mupdf.js，WASM）</td><td>在前端的 Web Worker 中运行，负责渲染、结构化文字提取、内容编辑、批注、表单、页面操作、保存。放在 Worker 里，处理大文件时界面不卡。撤销 / 重做使用 MuPDF 自带的 journal（操作日志）机制</td></tr>
-  <tr><td class="nowrap">中文字体</td><td>系统字体</td><td>由 Go 后端从 <code>C:\Windows\Fonts</code> 读取宋体、黑体、微软雅黑、楷体等，不打包大字体；保存时只嵌入用到的字（字体子集化），控制文件体积。注意宋体（<code>simsun.ttc</code>）、微软雅黑（<code>msyh.ttc</code>）等是 TTC 字体集合，加载时要指定子字体索引</td></tr>
+  <tr><td class="nowrap">中文字体</td><td>系统字体</td><td>由 Go 后端从 <code>C:\Windows\Fonts</code>（及用户字体目录）读取宋体、黑体、微软雅黑、楷体等，不打包大字体；保存时只嵌入用到的字（字体子集化），控制文件体积。注意宋体（<code>simsun.ttc</code>）、微软雅黑（<code>msyh.ttc</code>）等是 TTC 字体集合，加载时要指定子字体索引。MuPDF 只能对 TrueType 轮廓的字体做子集化，CFF 轮廓（OpenType/PostScript，如思源 / Noto）会整个嵌入，因此写入时优先 TrueType 字体</td></tr>
   <tr><td class="nowrap">Go 后端</td><td>Go 标准库 + Wails 绑定</td><td>文件读写、覆盖保存与备份、系统字体枚举与读取、OCR 推理（如采用 Go 端方案）、调用 Office/WPS 转换、打印、命令行参数（支持双击 PDF 用本程序打开）、设置存储</td></tr>
   <tr><td class="nowrap">文件传输</td><td>Wails AssetServer 自定义 Handler</td><td>Wails 绑定调用会把 <code>[]byte</code> 转成 base64 JSON 传递，大文件又慢又占内存。PDF、字体等二进制数据一律走 AssetServer 的自定义 Handler：前端用 <code>fetch</code> 直接取得 ArrayBuffer，保存时以 POST 回传。绑定调用只传路径、参数等小数据</td></tr>
   <tr><td class="nowrap">OCR</td><td>PaddleOCR（PP-OCR）模型 + ONNX Runtime</td><td>中文识别准确率明显好于 Tesseract。推理位置两种方案待阶段 6 前实测决定：<br>① <b>Go 端</b>：速度快；但常见的 Go 绑定（如 onnxruntime_go）依赖 cgo，需要 MinGW 工具链，构建变复杂（Wails v2 在 Windows 上本身不需要 cgo）；<br>② <b>前端</b>：用 onnxruntime-web（WASM）在 Worker 中推理，免 cgo，发布更简单，不需要 <code>onnxruntime.dll</code>，但速度较慢</td></tr>
@@ -348,7 +348,7 @@
   <tr><th>功能</th><th>说明</th><th>优先级</th></tr>
   <tr><td>PDF → 图片</td><td>PNG / JPG，可选 DPI 和页面范围</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>PDF → 纯文本</td><td>按页导出 TXT</td><td><span class="tag p1">P1</span></td></tr>
-  <tr><td>PDF → Word</td><td>尽力还原排版，先试 MuPDF 自带的 docx 输出；不保证复杂版式。注意：C 版 MuPDF 的 docx 输出依赖内置的 extract 库，需先确认 mupdf.js 的 WASM 构建是否包含该功能，不包含时再评估其他方案</td><td><span class="tag p2">P2</span></td></tr>
+  <tr><td>PDF → Word</td><td>尽力还原排版，先试 MuPDF 自带的 docx 输出；不保证复杂版式。注意：C 版 MuPDF 的 docx 输出依赖内置的 extract 库，需先确认 mupdf.js 的 WASM 构建是否包含该功能，不包含时再评估其他方案。<b>阶段 0 已确认 mupdf.js 不包含 docx 输出</b>，延后到阶段 7 另找方案</td><td><span class="tag p2">P2</span></td></tr>
   <tr><td>图片 → PDF</td><td>多张图片合成 PDF，可排序，可选页面尺寸和边距</td><td><span class="tag p0">P0</span></td></tr>
   <tr><td>Office → PDF</td><td>Word、Excel、PPT 文件转 PDF，调用本机 Office 或 WPS；本机没装时给出提示</td><td><span class="tag p1">P1</span></td></tr>
 </table>
@@ -479,6 +479,7 @@
   <tr><td>段落排版需自己实现</td><td>工作量大，中文断行效果不理想</td><td>阶段 0 先做最简版（单一字体、左对齐 + 避头尾），阶段 2 再补两端对齐、混合字体等</td></tr>
   <tr><td>mupdf.js 未暴露所需接口（journal、docx 输出等）</td><td>撤销 / 重做或 PDF 转 Word 要另想办法</td><td>阶段 0 逐项确认；journal 不可用时改为保存文档快照做撤销；docx 不可用时 PDF 转 Word 延后</td></tr>
   <tr><td>OCR 放在 Go 端需要 cgo</td><td>构建需要 MinGW，交叉编译和打包更复杂</td><td>阶段 6 前对比 Go 端和前端（onnxruntime-web）两种方案后再定</td></tr>
+  <tr><td>系统字体为 CFF 轮廓（思源、Noto 等）</td><td>无法子集化，整个字体嵌入，文件增大几十 MB</td><td>写入和缺字回退只用 TrueType 字体；原字体是 CFF 时换用相近的 TrueType 字体并提示（阶段 0 已实现）</td></tr>
   <tr><td>打印质量和速度</td><td>位图打印文件大、速度慢</td><td>按打印机实际 DPI 渲染、逐页提交；阶段 1 实测</td></tr>
 </table>
 <div class="note info">
@@ -490,7 +491,7 @@
 <h2 id="s9">9. 待确认事项</h2>
 <table>
   <tr><th>事项</th><th>当前建议</th><th>状态</th></tr>
-  <tr><td>前端框架</td><td>建议直接采用 Svelte：体积小，响应式写法简洁；没有特别理由不必换成 React / Vue</td><td><span class="tag p1">待确认</span></td></tr>
+  <tr><td>前端框架</td><td>Svelte 5</td><td><span class="tag p0">已确定</span></td></tr>
   <tr><td>测试用 PDF 样本</td><td>阶段 0 由 Claude 生成一套样本（见 7 节阶段 0）。生成的样本模拟不了 Word / WPS 真实导出的内部结构，建议用户另外补充 2–3 个日常真的会改的文件</td><td><span class="tag p0">已确定</span></td></tr>
   <tr><td>WebView2 运行时</td><td>默认不带；优先用系统 WebView2，系统没有时用程序目录下的 <code>webview2/</code>（见 2 节）</td><td><span class="tag p0">已确定</span></td></tr>
   <tr><td>程序存放位置</td><td>放在可写目录，例如 <code>D:\Tools\PDFTool\</code></td><td><span class="tag p1">待确认</span></td></tr>
@@ -517,10 +518,18 @@
       <li>WebView2 采用折中方案：默认不带运行时；启动时先用系统 WebView2，没有再用程序目录下的 <code>webview2/</code> 固定版本，都没有则中文提示；构建时指定 <code>-webview2 error</code> 避免联网下载（2、7、8、9 节）</li>
     </ul>
   </td></tr>
+  <tr><td class="nowrap">v0.4</td><td class="nowrap">2026-11-25</td><td>
+    <ul>
+      <li>阶段 0 完成，结果见《PDFTool 阶段 0 验证报告》</li>
+      <li>前端框架确定为 Svelte 5（3.1、9 节）</li>
+      <li>补充字体说明：读取用户字体目录；CFF 轮廓字体无法子集化，写入时优先 TrueType（3.1、8 节）</li>
+      <li>PDF → Word：已确认 mupdf.js 不含 docx 输出，延后到阶段 7（4.7 节）</li>
+    </ul>
+  </td></tr>
 </table>
 
 <footer>
-  PDFTool 需求文档 v0.3 · 2026-11-25
+  PDFTool 需求文档 v0.4 · 2026-11-25
 </footer>
 
 </div>

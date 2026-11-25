@@ -1,0 +1,11 @@
+build/bin
+build/devdata
+build/devserver
+build/devserver.log
+frontend/dist/*
+!frontend/dist/gitkeep
+frontend/node_modules
+testdata/samples
+testdata/out
+frontend/src/wailsjs
+frontend/package.json.md5

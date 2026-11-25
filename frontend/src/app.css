@@ -1,0 +1,54 @@
+:root {
+  --bg: #ffffff;
+  --panel: #f6f7f9;
+  --canvas: #e4e6ea;
+  --line: #d6d9de;
+  --text: #1f2328;
+  --muted: #5d6470;
+  --accent: #1f6feb;
+  --brand: #c0392b;
+  --warn: #b35900;
+  color-scheme: light;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Segoe UI", sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+}
+button {
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+button:disabled {
+  color: #a3a8b0;
+  cursor: default;
+}
+button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+button.primary:hover:not(:disabled) {
+  background: #1a5fd0;
+}
+button.primary:disabled {
+  background: #9dbcf0;
+  color: #fff;
+}
+button.ghost {
+  border-color: var(--line);
+  background: var(--bg);
+}

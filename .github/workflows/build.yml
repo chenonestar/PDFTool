@@ -1,0 +1,43 @@
+name: build
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: go vet ./... && go test ./internal/...
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run check && npm test
+        working-directory: frontend
+
+  windows:
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.1
+      # -webview2 error：找不到 WebView2 时不联网下载（程序自己会先检查并提示）
+      - run: wails build -platform windows/amd64 -webview2 error -skipbindings -trimpath -clean
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PDFTool-windows-amd64
+          path: build/bin/PDFTool.exe
+          retention-days: 30
