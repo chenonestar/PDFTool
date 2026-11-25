@@ -128,7 +128,7 @@
 <header>
   <h1><span>PDFTool</span> 需求文档</h1>
   <div class="meta">
-    <div>版本：<b>v0.2</b></div>
+    <div>版本：<b>v0.3</b></div>
     <div>日期：<b>2026-11-25</b></div>
     <div>状态：<b>需求阶段</b></div>
     <div>使用范围：<b>个人自用</b></div>
@@ -167,7 +167,7 @@
 <table>
   <tr><th>项目</th><th>要求</th></tr>
   <tr><td>操作系统</td><td>Windows 10 / 11，64 位</td></tr>
-  <tr><td>运行依赖</td><td>系统自带的 Microsoft Edge WebView2 Runtime（Win10 一般已随 Edge 安装，Win11 内置）</td></tr>
+  <tr><td>运行依赖</td><td>优先使用系统自带的 Microsoft Edge WebView2 Runtime（Win10 一般已随 Edge 安装，Win11 内置）；系统没有时，使用程序目录下 <code>webview2/</code> 中的固定版本运行时（默认不带，需要时自行放入）。查找顺序见下方"WebView2 运行时"</td></tr>
   <tr><td>安装方式</td><td>绿色免安装：解压即用，不写注册表，不往 AppData 写数据，整个文件夹拷走即可使用。实现要点见下方"便携性约束"</td></tr>
   <tr><td>存放位置</td><td>程序目录必须可写（如 <code>D:\Tools\PDFTool\</code>），不要放在 <code>C:\Program Files\</code> 等受保护目录下</td></tr>
   <tr><td>网络</td><td>完全离线运行，不联网</td></tr>
@@ -177,6 +177,7 @@
 <h3>2.1 发布目录结构</h3>
 <pre class="tree">PDFTool/
 ├── PDFTool.exe              <span class="c"># 主程序（Wails 打包，前端资源内嵌）</span>
+├── webview2/                <span class="c"># 可选，默认不带：WebView2 固定版本运行时，仅系统缺少 WebView2 时使用</span>
 ├── ocr/                     <span class="c"># OCR 模型与运行库</span>
 │   ├── onnxruntime.dll      <span class="c"># 仅 Go 端推理方案需要，见 3.1</span>
 │   ├── det.onnx             <span class="c"># 文字检测模型</span>
@@ -200,8 +201,15 @@
 </div>
 
 <div class="note info">
-  <b>备选方案</b>
-  如果某台电脑缺少 WebView2，可以把微软提供的 WebView2 Fixed Version 运行时放进程序目录，实现完全不依赖系统组件（体积会增加约 150MB）。默认版本不带。
+  <b>WebView2 运行时（默认不带，按需放入）</b>
+  程序主要在自己的电脑上使用，Win10 / 11 基本都已装有 WebView2，因此默认发布版不带运行时，保持程序小巧。启动时按以下顺序查找：
+  <ol>
+    <li><b>系统 WebView2</b>：已安装就直接使用（常规情况）；</li>
+    <li><b>程序目录下的 <code>webview2/</code></b>：系统没有时，检查该文件夹中是否有微软提供的 WebView2 固定版本（Fixed Version）运行时，有就通过 Wails 的 <code>options.Windows.WebviewBrowserPath</code> 指定使用；</li>
+    <li><b>都没有</b>：弹出中文提示（说明可以安装 WebView2 Runtime，或把固定版本运行时解压到 <code>webview2/</code>），然后退出。</li>
+  </ol>
+  查找由程序自己在调用 <code>wails.Run</code> 之前完成。构建时指定 <code>-webview2 error</code>，避免 Wails 默认的"联网下载安装 WebView2"行为，符合离线要求。<br>
+  固定版本运行时体积较大（下载包约 150MB，解压后更大，具体以实测为准），且不会自动更新；本程序离线运行、只加载自身页面，安全影响很小。
 </div>
 
 <!-- 3 -->
@@ -390,7 +398,7 @@
   <div class="no">阶段 0</div>
   <div class="body">
     <h4>技术验证</h4>
-    <p>搭好 Wails 项目骨架（WebView2 用户数据目录指向 <code>data/webview/</code>）；让 mupdf.js 在 WebView2 的 Worker 里跑起来；完成页面渲染和"点段落 → 改字 → 保存"的最简原型（跑通 3.3 的五个步骤）。同时验证以下几点：</p>
+    <p>搭好 Wails 项目骨架（WebView2 用户数据目录指向 <code>data/webview/</code>；实现 WebView2 运行时查找顺序，并实测一次使用 <code>webview2/</code> 固定版本运行时启动）；让 mupdf.js 在 WebView2 的 Worker 里跑起来；完成页面渲染和"点段落 → 改字 → 保存"的最简原型（跑通 3.3 的五个步骤）。同时验证以下几点：</p>
     <ul>
       <li>系统字体嵌入，包括 TTC 字体集合按索引加载；</li>
       <li>redaction 只删文字、不删表格线和图片；</li>
@@ -464,7 +472,7 @@
   <tr><td>mupdf.js 在 WebView2 中处理大文件的性能和内存</td><td>大文件卡顿</td><td>在 Worker 中运行；按需渲染；阶段 0 顺带测试大文件</td></tr>
   <tr><td>OCR 模型体积与识别精度</td><td>程序变大或识别不准</td><td>采用 PP-OCR 轻量模型；阶段 6 前做选型验证</td></tr>
   <tr><td>PDF 转 Word 效果有限</td><td>复杂版式还原差</td><td>定为 P2，"尽力还原"，不作为核心功能</td></tr>
-  <tr><td>电脑缺少 WebView2</td><td>程序无法启动</td><td>启动时检测并提示；备选 Fixed Version 运行时</td></tr>
+  <tr><td>电脑缺少 WebView2</td><td>程序无法启动</td><td>启动时按"系统 → <code>webview2/</code> 目录"顺序查找；都没有时中文提示，用户可把固定版本运行时放进 <code>webview2/</code> 后直接使用</td></tr>
   <tr><td>WebView2 默认往 AppData 写用户数据</td><td>违反绿色免安装要求</td><td>设置 <code>WebviewUserDataPath</code> 指向 <code>data/webview/</code>；阶段 0 检查 AppData 下没有新建目录</td></tr>
   <tr><td>Wails 绑定传 <code>[]byte</code> 走 base64 JSON</td><td>大文件打开、保存慢，内存翻倍</td><td>二进制数据统一走 AssetServer 自定义 Handler；阶段 0 用 100MB 级文件测试</td></tr>
   <tr><td>删除原文字时误删表格线、底纹</td><td>改字后版面被破坏</td><td>redaction 参数设为只删文字；阶段 0 用带表格的文件验证</td></tr>
@@ -484,7 +492,7 @@
   <tr><th>事项</th><th>当前建议</th><th>状态</th></tr>
   <tr><td>前端框架</td><td>建议直接采用 Svelte：体积小，响应式写法简洁；没有特别理由不必换成 React / Vue</td><td><span class="tag p1">待确认</span></td></tr>
   <tr><td>测试用 PDF 样本</td><td>阶段 0 由 Claude 生成一套样本（见 7 节阶段 0）。生成的样本模拟不了 Word / WPS 真实导出的内部结构，建议用户另外补充 2–3 个日常真的会改的文件</td><td><span class="tag p0">已确定</span></td></tr>
-  <tr><td>WebView2 是否已安装</td><td>"设置 → 应用"中搜索 "WebView2 Runtime" 确认</td><td><span class="tag p1">待确认</span></td></tr>
+  <tr><td>WebView2 运行时</td><td>默认不带；优先用系统 WebView2，系统没有时用程序目录下的 <code>webview2/</code>（见 2 节）</td><td><span class="tag p0">已确定</span></td></tr>
   <tr><td>程序存放位置</td><td>放在可写目录，例如 <code>D:\Tools\PDFTool\</code></td><td><span class="tag p1">待确认</span></td></tr>
 </table>
 
@@ -501,13 +509,18 @@
       <li>功能：新增"打印"（P1，4.1 节）；PDF 转 Word 增加 mupdf.js 是否支持 docx 输出的验证说明（4.7 节）</li>
       <li>开发计划：阶段 0 补充验证清单；阶段 1 加入打印和便携性检查；阶段 6 明确 OCR 方案对比内容</li>
       <li>风险：新增 7 项风险及对策；待确认事项新增"程序存放位置"</li>
+    </ul>
+  </td></tr>
+  <tr><td class="nowrap">v0.3</td><td class="nowrap">2026-11-25</td><td>
+    <ul>
       <li>测试样本改为由 Claude 在阶段 0 生成，并列出样本类型（7、9 节）</li>
+      <li>WebView2 采用折中方案：默认不带运行时；启动时先用系统 WebView2，没有再用程序目录下的 <code>webview2/</code> 固定版本，都没有则中文提示；构建时指定 <code>-webview2 error</code> 避免联网下载（2、7、8、9 节）</li>
     </ul>
   </td></tr>
 </table>
 
 <footer>
-  PDFTool 需求文档 v0.2 · 2026-11-25
+  PDFTool 需求文档 v0.3 · 2026-11-25
 </footer>
 
 </div>
