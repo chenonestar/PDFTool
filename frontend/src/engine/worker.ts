@@ -61,6 +61,7 @@ const methods = {
         size: p.size,
         style: p.textStyles[0] ?? 0,
         lines: p.lines.length,
+        cell: p.cell,
       })),
     }
   },

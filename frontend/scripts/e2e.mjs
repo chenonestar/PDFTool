@@ -9,7 +9,8 @@ const OUT = path.join(ROOT, "testdata/out/e2e")
 const BASE = process.env.BASE ?? "http://127.0.0.1:34115"
 fs.rmSync(OUT, { recursive: true, force: true })
 fs.mkdirSync(OUT, { recursive: true })
-const work = path.join(OUT, "通知.pdf")
+// 每次用新文件名：开发服务器在一次运行中对同一路径只备份一次
+const work = path.join(OUT, `通知-${Date.now()}.pdf`)
 fs.copyFileSync(path.join(ROOT, "testdata/samples/01-通知-混合字体.pdf"), work)
 
 let fails = 0

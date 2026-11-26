@@ -13,12 +13,14 @@ function styleKey(s: CharStyle) {
 export interface PageText {
   styles: CharStyle[]
   lines: PLine[]
-  vectors: Rect4[]
+  vectors: Rect4[] // 线条、色块
+  images: Rect4[]
 }
 
 export function extractLines(page: mupdf.Page): PageText {
   const vectors: Rect4[] = []
-  const stroked = collectGraphics(page, vectors)
+  const images: Rect4[] = []
+  const stroked = collectGraphics(page, vectors, images)
   const st = page.toStructuredText(STEXT_OPTIONS)
   const styles: CharStyle[] = []
   const index = new Map<string, number>()
@@ -62,13 +64,14 @@ export function extractLines(page: mupdf.Page): PageText {
     endLine() {
       if (cur && cur.length && horizontal) {
         const chars = cur.filter((ch) => ch.c !== "\n")
-        if (chars.length) lines.push(makeLine(chars, styles))
+        // MuPDF 会把紧挨着的表格单元格文字合成一行，这里按竖线和大间距再切开
+        for (const seg of splitAtRules(chars, styles, vectors)) lines.push(makeLine(seg, styles))
       }
       cur = null
     },
   })
   st.destroy()
-  return { styles, lines, vectors }
+  return { styles, lines, vectors, images }
 }
 
 const glyphKey = (x: number, y: number) => `${Math.round(x * 2)},${Math.round(y * 2)}`
@@ -78,7 +81,7 @@ const glyphKey = (x: number, y: number) => `${Math.round(x * 2)},${Math.round(y 
  * - 收集线条/色块范围（用于找表格框线；mupdf.js 的 stext 选项不提供这项）
  * - 收集描边文字的字形原点（用于识别伪粗体）
  */
-function collectGraphics(page: mupdf.Page, out: Rect4[]): Set<string> {
+function collectGraphics(page: mupdf.Page, out: Rect4[], images: Rect4[]): Set<string> {
   const stroked = new Set<string>()
   const push = (r: number[]) => {
     if (r[2] - r[0] < 1e4 && r[3] - r[1] < 1e4) out.push([r[0], r[1], r[2], r[3]])
@@ -89,6 +92,12 @@ function collectGraphics(page: mupdf.Page, out: Rect4[]): Set<string> {
     },
     strokePath(path, stroke, ctm) {
       push(path.getBounds(stroke, ctm))
+    },
+    fillImage(_img, ctm) {
+      images.push(unitRect(ctm))
+    },
+    fillImageMask(_img, ctm) {
+      images.push(unitRect(ctm))
     },
     strokeText(text, _stroke, ctm) {
       text.walk({
@@ -106,6 +115,46 @@ function collectGraphics(page: mupdf.Page, out: Rect4[]): Set<string> {
     dev.destroy()
   }
   return stroked
+}
+
+function unitRect(m: number[]): Rect4 {
+  const xs = [m[4], m[0] + m[4], m[2] + m[4], m[0] + m[2] + m[4]]
+  const ys = [m[5], m[1] + m[5], m[3] + m[5], m[1] + m[3] + m[5]]
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
+}
+
+/** 与给定纵向范围重叠的竖向边界：细竖线，以及纵向覆盖该范围的色块的左右边 */
+export function verticalRules(vectors: Rect4[], y0: number, y1: number): number[] {
+  const h = y1 - y0
+  const xs: number[] = []
+  for (const v of vectors) {
+    const overlap = Math.min(v[3], y1) - Math.max(v[1], y0)
+    if (v[2] - v[0] < 3) {
+      if (overlap >= h * 0.6) xs.push((v[0] + v[2]) / 2)
+    } else if (overlap >= h * 0.9) {
+      xs.push(v[0], v[2])
+    }
+  }
+  return xs
+}
+
+function splitAtRules(chars: PChar[], styles: CharStyle[], vectors: Rect4[]): PChar[][] {
+  if (chars.length < 2) return [chars]
+  const y0 = Math.min(...chars.map((c) => c.bbox[1]))
+  const y1 = Math.max(...chars.map((c) => c.bbox[3]))
+  const rules = verticalRules(vectors, y0, y1)
+  const out: PChar[][] = [[chars[0]]]
+  for (let i = 1; i < chars.length; i++) {
+    const a = chars[i - 1]
+    const b = chars[i]
+    const ca = (a.bbox[0] + a.bbox[2]) / 2
+    const cb = (b.bbox[0] + b.bbox[2]) / 2
+    const size = styles[b.style].size
+    const gap = b.bbox[0] - a.bbox[2]
+    if (gap > size * 2.5 || rules.some((x) => x > ca && x < cb)) out.push([b])
+    else out[out.length - 1].push(b)
+  }
+  return out.filter((seg) => seg.some((c) => !/\s/.test(c.c)))
 }
 
 function toRGB(color: number[]): RGB {
@@ -156,7 +205,7 @@ export function groupParagraphs(pt: PageText, pageBounds: Rect4): PageParagraphs
   const textLeft = Math.min(...lines.map((l) => l.bbox[0]), pageBounds[2])
   const textRight = Math.max(...lines.map((l) => l.bbox[2]), pageBounds[0])
   const paragraphs = groups.map((g, id) => buildParagraph(id, g, pt, textLeft, textRight))
-  return { styles, paragraphs }
+  return { styles, paragraphs, obstacles: [...pt.vectors, ...pt.images] }
 }
 
 function continues(g: PLine[], line: PLine): boolean {
@@ -213,6 +262,7 @@ function buildParagraph(id: number, lines: PLine[], pt: PageText, textLeft: numb
   const pitch = lines.length >= 2 ? (lines[lines.length - 1].baseline - lines[0].baseline) / (lines.length - 1) : size * 1.5
 
   let align: Align = "left"
+  let cell = false
   let left: number
   let right: number
   let firstIndent = 0
@@ -227,34 +277,54 @@ function buildParagraph(id: number, lines: PLine[], pt: PageText, textLeft: numb
   } else {
     const l = lines[0]
     const mid = (l.bbox[0] + l.bbox[2]) / 2
-    // 单行段落：可用宽度扩展到页面正文范围，但遇到竖线（表格框线）就停下
-    const [limL, limR] = horizontalLimits(l, pt.vectors, textLeft, textRight)
-    if (Math.abs(mid - (textLeft + textRight) / 2) < 3 && l.bbox[0] - textLeft > size * 2) {
+    // 单行段落：可用宽度扩展到页面正文范围，但遇到竖线（表格框线）或色块边缘就停下
+    const lim = horizontalLimits(l, pt.vectors, textLeft, textRight)
+    if (lim.boundedL && lim.boundedR) {
+      // 表格单元格：对齐方式按单元格判断
+      cell = true
+      const lpad = l.bbox[0] - lim.left
+      const rpad = lim.right - l.bbox[2]
+      if (Math.abs(lpad - rpad) < Math.max(2, (lim.right - lim.left) * 0.08) && lpad > 2) {
+        align = "center"
+        const half = Math.min(mid - lim.left, lim.right - mid) - 1
+        left = mid - half
+        right = mid + half
+      } else if (rpad < lpad) {
+        align = "right"
+        left = lim.left + 1
+        right = l.bbox[2]
+      } else {
+        left = l.bbox[0]
+        right = lim.right - 1
+      }
+    } else if (Math.abs(mid - (textLeft + textRight) / 2) < 3 && l.bbox[0] - textLeft > size * 2) {
       align = "center"
-      const half = Math.min(mid - limL, limR - mid)
+      const half = Math.min(mid - lim.left, lim.right - mid)
       left = mid - half
       right = mid + half
     } else if (Math.abs(l.bbox[2] - textRight) < 3 && l.bbox[0] - textLeft > size * 4) {
       align = "right"
-      left = limL
+      left = lim.left
       right = l.bbox[2]
     } else {
       left = l.bbox[0]
-      right = Math.max(limR, l.bbox[2])
+      right = Math.max(lim.right, l.bbox[2])
     }
   }
-  return { id, lines, bbox, text, textStyles, align, left, right, firstIndent, pitch, size }
+  return { id, lines, bbox, text, textStyles, align, left, right, firstIndent, pitch, size, cell }
 }
 
-function horizontalLimits(l: PLine, vectors: Rect4[], textLeft: number, textRight: number): [number, number] {
-  let limL = Math.min(textLeft, l.bbox[0])
-  let limR = Math.max(textRight, l.bbox[2])
-  for (const v of vectors) {
-    const thin = v[2] - v[0] < 3
-    const vOverlap = Math.min(v[3], l.bbox[3]) - Math.max(v[1], l.bbox[1])
-    if (!thin || vOverlap < (l.bbox[3] - l.bbox[1]) * 0.5) continue
-    if (v[0] >= l.bbox[2] - 1) limR = Math.min(limR, v[0] - 2)
-    if (v[2] <= l.bbox[0] + 1) limL = Math.max(limL, v[2] + 2)
+function horizontalLimits(l: PLine, vectors: Rect4[], textLeft: number, textRight: number) {
+  // 先找离文字最近的左右竖线；没有竖线的一侧退回到页面正文范围
+  let ruleL = -Infinity
+  let ruleR = Infinity
+  for (const x of verticalRules(vectors, l.bbox[1], l.bbox[3])) {
+    if (x >= l.bbox[2] - 1 && x < ruleR) ruleR = x
+    if (x <= l.bbox[0] + 1 && x > ruleL) ruleL = x
   }
-  return [limL, limR]
+  const boundedL = ruleL > -Infinity
+  const boundedR = ruleR < Infinity
+  const left = boundedL ? ruleL + 1 : Math.min(textLeft, l.bbox[0])
+  const right = boundedR ? ruleR - 1 : Math.max(textRight, l.bbox[2])
+  return { left, right, boundedL, boundedR }
 }

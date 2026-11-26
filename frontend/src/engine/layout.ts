@@ -139,7 +139,9 @@ export function layoutParagraph(chars: LayoutChar[], measure: Measure, width: nu
       }
       i--
     }
-    emit(true)
+    // 段落结束：如果最后一行刚好因为悬挂标点已经输出，就不再多出一个空行
+    if (cur.length || lines.length === 0 || lines[lines.length - 1].hard) emit(true)
+    else lines[lines.length - 1].hard = true
   }
   return lines
 }

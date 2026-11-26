@@ -58,3 +58,15 @@ test("两端对齐间距", () => {
   assert.ok(Math.abs(justifySpacing(lines[0], 45) - 5 / 3) < 1e-9)
   assert.equal(justifySpacing(lines[1], 45), 0) // 最后一行不拉伸
 })
+
+test("段末标点悬挂后不多出空行", () => {
+  const lines = layoutParagraph(chars("一二三四。"), measure, 40)
+  assert.deepEqual(lines.map(text), ["一二三四。"])
+  assert.equal(lines[0].hard, true)
+})
+
+test("空段落得到一个空行", () => {
+  const lines = layoutParagraph([], measure, 40)
+  assert.equal(lines.length, 1)
+  assert.equal(lines[0].chars.length, 0)
+})

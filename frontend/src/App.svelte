@@ -98,12 +98,15 @@
       const notes: string[] = []
       const rep = r.report
       if (rep.overflow) notes.push(`文字排成 ${rep.lines} 行，超出原段落区域，可能与下方内容重叠`)
+      if (rep.shiftBlocked) notes.push(rep.shiftBlocked)
+      if (rep.shrink < 1) notes.push(`单元格放不下，字号已缩小到 ${Math.round(rep.shrink * 100)}%`)
       if (rep.missingChars) notes.push(`系统字体中找不到「${rep.missingChars}」，已省略`)
       const fb = rep.fonts.filter((f) => f.fallbackChars).map((f) => `「${f.fallbackChars}」`)
       if (fb.length) notes.push(`原字体缺字 ${fb.join("")}，已用其他字体补上`)
       const sub = rep.fonts.filter((f) => f.substituted).map((f) => `${f.style.font} → ${f.face}`)
       if (sub.length) notes.push(`字体已替换：${sub.join("，")}`)
-      say(`已修改（${Math.round(performance.now() - t0)} ms），字体：${[...new Set(rep.fonts.map((f) => f.face))].join("、")}`, notes.join("；"))
+      const moved = rep.moved ? `，下方 ${rep.moved} 段内容已${rep.movedBy > 0 ? "下移" : "上移"}` : ""
+      say(`已修改（${Math.round(performance.now() - t0)} ms${moved}），字体：${[...new Set(rep.fonts.map((f) => f.face))].join("、")}`, notes.join("；"))
     } catch (e) {
       say("", "修改失败：" + (e as Error).message)
     } finally {

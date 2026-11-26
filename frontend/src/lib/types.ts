@@ -13,6 +13,7 @@ export interface ParaView {
   size: number
   style: number
   lines: number
+  cell: boolean
 }
 
 export interface EditTarget {
